@@ -1,0 +1,15 @@
+[Unit]
+Description=Board one-shot network time sync
+After=network-online.target init_post_boot.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+SELinuxContext=system_u:system_r:unconfined_t:s0-s15:c0.c1023
+ExecStart=/bin/sh /etc/board-time-sync
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

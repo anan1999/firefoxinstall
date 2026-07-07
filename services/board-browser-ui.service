@@ -1,0 +1,19 @@
+[Unit]
+Description=Board Browser UI
+After=init_display.service
+Requires=init_display.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+SELinuxContext=system_u:system_r:unconfined_t:s0-s15:c0.c1023
+Environment=XDG_RUNTIME_DIR=/run/user/root
+Environment=WAYLAND_DISPLAY=wayland-1
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do [ -e /run/user/root/wayland-1 ] && exit 0; sleep 1; done; exit 1'
+ExecStart=/bin/sh /etc/board-open-firefox
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

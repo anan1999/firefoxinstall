@@ -1,0 +1,43 @@
+#!/usr/bin/env sh
+set -eu
+
+KIT="/data/local/tmp/board-browser-kit"
+FIREFOX="$KIT/firefox-esr/firefox/firefox"
+PROFILE="${FIREFOX_PROFILE_DIR:-$KIT/firefox-profile}"
+URL="${1:-file:///data/local/tmp/board-browser-kit/board-firefox-home.html}"
+LOG="/tmp/firefox-board.log"
+RUNTIME="$KIT/runtime-root"
+
+mkdir -p "$PROFILE" "$RUNTIME" /run/user/root
+chmod 700 "$RUNTIME"
+rm -f "$RUNTIME/wayland-1" "$RUNTIME/wayland-1.lock"
+ln -sf /run/user/root/wayland-1 "$RUNTIME/wayland-1"
+"$KIT/board-network-up" >/tmp/board-network-up.log 2>&1 || true
+pkill firefox 2>/dev/null || true
+
+export XDG_RUNTIME_DIR="$RUNTIME"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+export MOZ_ENABLE_WAYLAND=1
+export MOZ_DBUS_REMOTE=0
+export MOZ_DISABLE_CONTENT_SANDBOX=1
+export MOZ_DISABLE_GMP_SANDBOX=1
+export MOZ_DISABLE_RDD_SANDBOX=1
+export MOZ_DISABLE_SOCKET_PROCESS_SANDBOX=1
+export NO_AT_BRIDGE=1
+export LD_LIBRARY_PATH="$KIT/firefox-libs:/usr/lib:/usr/lib/aarch64-linux-gnu:$KIT/browser/lib:$KIT/browser/lib/pulseaudio:${LD_LIBRARY_PATH:-}"
+export LD_PRELOAD="$KIT/libwayland_resize_guard.so${LD_PRELOAD:+:$LD_PRELOAD}"
+export GDK_BACKEND=wayland
+export GDK_PIXBUF_MODULE_FILE="$KIT/midori-browser/usr/lib/aarch64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache"
+export GDK_PIXBUF_MODULEDIR="$KIT/midori-browser/usr/lib/aarch64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders"
+export XDG_DATA_DIRS="$KIT/midori-browser/usr/share:$KIT/browser/share:${XDG_DATA_DIRS:-/usr/share}"
+export FONTCONFIG_FILE="$KIT/fontconfig/fonts.conf"
+export FONTCONFIG_PATH="$KIT/fontconfig"
+export GTK_CSD=0
+export MOZ_GTK_TITLEBAR_DECORATION=system
+export HOME="$KIT/firefox-home"
+export XDG_CACHE_HOME="$KIT/firefox-cache"
+export XDG_CONFIG_HOME="$KIT/firefox-config"
+mkdir -p "$HOME" "$XDG_CACHE_HOME" "$XDG_CONFIG_HOME"
+
+echo "Opening Firefox ESR on $WAYLAND_DISPLAY: $URL" > "$LOG"
+exec "$FIREFOX" --no-remote --new-instance --profile "$PROFILE" "$URL" >> "$LOG" 2>&1

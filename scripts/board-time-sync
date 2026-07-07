@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+set -eu
+
+LOG="/tmp/board-time-sync.log"
+KIT="/data/local/tmp/board-browser-kit"
+
+{
+  echo "==== board time sync $(date) ===="
+
+  if [ -x "$KIT/board-network-up" ]; then
+    "$KIT/board-network-up" || true
+  fi
+
+  synced=0
+  for server in time.google.com pool.ntp.org time.cloudflare.com; do
+    echo "Trying NTP server: $server"
+    if /usr/sbin/ntpd -n -q -p "$server"; then
+      synced=1
+      break
+    fi
+  done
+
+  if [ "$synced" -eq 0 ] && command -v rdate >/dev/null 2>&1; then
+    for server in time.nist.gov time-a-g.nist.gov; do
+      echo "Trying RFC868 server: $server"
+      if rdate -s "$server"; then
+        synced=1
+        break
+      fi
+    done
+  fi
+
+  if [ "$synced" -eq 1 ]; then
+    echo "Time synced: $(date)"
+    hwclock -w 2>/dev/null || true
+    exit 0
+  fi
+
+  echo "Time sync failed: $(date)"
+  exit 1
+} > "$LOG" 2>&1

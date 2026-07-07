@@ -1,0 +1,26 @@
+#!/usr/bin/env sh
+set -eu
+
+if ping -c 1 -W 1 8.8.8.8 >/dev/null 2>&1; then
+  exit 0
+fi
+
+if command -v ip >/dev/null 2>&1; then
+  ip link set eth0 up 2>/dev/null || true
+fi
+
+if command -v udhcpc >/dev/null 2>&1; then
+  udhcpc -i eth0 -q -n -t 3 -T 3 >/tmp/board_browser_udhcpc.log 2>&1 || true
+fi
+
+if command -v ip >/dev/null 2>&1; then
+  gateway="$(ip -4 addr show eth0 2>/dev/null | awk '/inet / { split($2, a, "/"); split(a[1], o, "."); print o[1]"."o[2]"."o[3]".1"; exit }')"
+  if [ -n "$gateway" ]; then
+    if ! ip route | grep -q '^default via '; then
+      ip route replace default via "$gateway" dev eth0 2>/dev/null || true
+    fi
+    if ! ping -c 1 -W 1 8.8.8.8 >/dev/null 2>&1; then
+      ip route replace default via "$gateway" dev eth0 2>/dev/null || true
+    fi
+  fi
+fi

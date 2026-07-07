@@ -1,0 +1,37 @@
+#!/usr/bin/env sh
+set -eu
+
+INTERVAL="${1:-5}"
+OUT="${2:-/tmp/board-memory-monitor.csv}"
+
+echo "timestamp,mem_total_kb,mem_available_kb,mem_free_kb,buffers_kb,cached_kb,swap_total_kb,swap_free_kb,firefox_rss_kb,firefox_processes,pressure_some_avg10,pressure_full_avg10" > "$OUT"
+
+while true; do
+  ts="$(date '+%Y-%m-%d %H:%M:%S')"
+  mem_total="$(awk '/^MemTotal:/ { print $2 }' /proc/meminfo)"
+  mem_avail="$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)"
+  mem_free="$(awk '/^MemFree:/ { print $2 }' /proc/meminfo)"
+  buffers="$(awk '/^Buffers:/ { print $2 }' /proc/meminfo)"
+  cached="$(awk '/^Cached:/ { print $2 }' /proc/meminfo)"
+  swap_total="$(awk '/^SwapTotal:/ { print $2 }' /proc/meminfo)"
+  swap_free="$(awk '/^SwapFree:/ { print $2 }' /proc/meminfo)"
+
+  firefox_rss=0
+  firefox_count=0
+  for p in /proc/[0-9]*; do
+    cmd="$(tr '\0' ' ' < "$p/cmdline" 2>/dev/null || true)"
+    case "$cmd" in
+      *firefox*|*firefox-bin*)
+        rss="$(awk '/^VmRSS:/ { print $2 }' "$p/status" 2>/dev/null || echo 0)"
+        firefox_rss=$((firefox_rss + rss))
+        firefox_count=$((firefox_count + 1))
+        ;;
+    esac
+  done
+
+  pressure_some="$(awk '/^some/ { for (i=1; i<=NF; i++) if ($i ~ /^avg10=/) { sub("avg10=", "", $i); print $i } }' /proc/pressure/memory 2>/dev/null || echo 0)"
+  pressure_full="$(awk '/^full/ { for (i=1; i<=NF; i++) if ($i ~ /^avg10=/) { sub("avg10=", "", $i); print $i } }' /proc/pressure/memory 2>/dev/null || echo 0)"
+
+  echo "$ts,$mem_total,$mem_avail,$mem_free,$buffers,$cached,$swap_total,$swap_free,$firefox_rss,$firefox_count,${pressure_some:-0},${pressure_full:-0}" >> "$OUT"
+  sleep "$INTERVAL"
+done

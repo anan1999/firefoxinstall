@@ -1,0 +1,53 @@
+#!/usr/bin/env sh
+set -eu
+
+echo "==== board memory snapshot $(date) ===="
+echo
+echo "[free]"
+free -h 2>/dev/null || true
+
+echo
+echo "[meminfo]"
+awk '
+  /^(MemTotal|MemFree|MemAvailable|Buffers|Cached|SwapTotal|SwapFree|Shmem|SReclaimable|Slab):/ {
+    print
+  }
+' /proc/meminfo
+
+echo
+echo "[memory pressure]"
+cat /proc/pressure/memory 2>/dev/null || true
+
+echo
+echo "[browser service]"
+systemctl show board-browser-ui.service \
+  -p ActiveState -p SubState -p MainPID -p MemoryCurrent -p MemoryPeak -p CPUUsageNSec 2>/dev/null || true
+
+echo
+echo "[firefox processes]"
+found=0
+for p in /proc/[0-9]*; do
+  pid="${p##*/}"
+  cmd="$(tr '\0' ' ' < "$p/cmdline" 2>/dev/null || true)"
+  case "$cmd" in
+    *firefox*|*firefox-bin*)
+      found=1
+      rss="$(awk '/^VmRSS:/ { print $2 " " $3 }' "$p/status" 2>/dev/null || true)"
+      hwm="$(awk '/^VmHWM:/ { print $2 " " $3 }' "$p/status" 2>/dev/null || true)"
+      name="$(awk '/^Name:/ { print $2 }' "$p/status" 2>/dev/null || true)"
+      printf "%-8s rss=%-12s hwm=%-12s name=%s cmd=%s\n" "$pid" "${rss:-n/a}" "${hwm:-n/a}" "$name" "$cmd"
+      ;;
+  esac
+done
+[ "$found" -eq 1 ] || echo "no firefox process"
+
+echo
+echo "[top rss processes]"
+for p in /proc/[0-9]*; do
+  pid="${p##*/}"
+  rss="$(awk '/^VmRSS:/ { print $2 }' "$p/status" 2>/dev/null || echo 0)"
+  name="$(awk '/^Name:/ { print $2 }' "$p/status" 2>/dev/null || echo unknown)"
+  cmd="$(tr '\0' ' ' < "$p/cmdline" 2>/dev/null || true)"
+  printf "%10s KB pid=%-8s name=%-18s %s\n" "$rss" "$pid" "$name" "$cmd"
+done | sort -nr | head -n 25
+
