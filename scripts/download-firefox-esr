@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+set -eu
+
+KIT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+URL="${FIREFOX_ESR_URL:-https://download.mozilla.org/?product=firefox-esr-latest-ssl&os=linux64-aarch64&lang=en-US}"
+OUT="$KIT/downloads/firefox-esr-linux-aarch64.tar.xz"
+
+echo "Downloading Firefox ESR ARM64 from Mozilla..."
+echo "URL: $URL"
+
+mkdir -p "$KIT/downloads" "$KIT/firefox-esr"
+
+if command -v wget >/dev/null 2>&1; then
+  wget -O "$OUT" "$URL"
+elif command -v curl >/dev/null 2>&1; then
+  curl -L -o "$OUT" "$URL"
+else
+  echo "ERROR: wget or curl is required to download Firefox ESR."
+  exit 1
+fi
+
+rm -rf "$KIT/firefox-esr/firefox"
+tar -xJf "$OUT" -C "$KIT/firefox-esr"
+
+if [ ! -x "$KIT/firefox-esr/firefox/firefox" ]; then
+  echo "ERROR: Firefox binary not found after extraction."
+  echo "Expected: $KIT/firefox-esr/firefox/firefox"
+  exit 1
+fi
+
+echo "Firefox ESR installed at: $KIT/firefox-esr/firefox"

@@ -24,8 +24,14 @@ export MOZ_DISABLE_GMP_SANDBOX=1
 export MOZ_DISABLE_RDD_SANDBOX=1
 export MOZ_DISABLE_SOCKET_PROCESS_SANDBOX=1
 export NO_AT_BRIDGE=1
-export LD_LIBRARY_PATH="$KIT/firefox-libs:/usr/lib:/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export LD_PRELOAD="$KIT/libwayland_resize_guard.so${LD_PRELOAD:+:$LD_PRELOAD}"
+if [ -d "$KIT/firefox-libs" ]; then
+  export LD_LIBRARY_PATH="$KIT/firefox-libs:/usr/lib:/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+else
+  export LD_LIBRARY_PATH="/usr/lib:/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+if [ -f "$KIT/libwayland_resize_guard.so" ]; then
+  export LD_PRELOAD="$KIT/libwayland_resize_guard.so${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
 export GDK_BACKEND=wayland
 if [ -f "$KIT/gdk-pixbuf/loaders.cache" ]; then
   export GDK_PIXBUF_MODULE_FILE="$KIT/gdk-pixbuf/loaders.cache"
@@ -34,8 +40,10 @@ if [ -d "$KIT/gdk-pixbuf/loaders" ]; then
   export GDK_PIXBUF_MODULEDIR="$KIT/gdk-pixbuf/loaders"
 fi
 export XDG_DATA_DIRS="$KIT/share:${XDG_DATA_DIRS:-/usr/share}"
-export FONTCONFIG_FILE="$KIT/fontconfig/fonts.conf"
-export FONTCONFIG_PATH="$KIT/fontconfig"
+if [ -f "$KIT/fontconfig/fonts.conf" ]; then
+  export FONTCONFIG_FILE="$KIT/fontconfig/fonts.conf"
+  export FONTCONFIG_PATH="$KIT/fontconfig"
+fi
 export GTK_CSD=0
 export MOZ_GTK_TITLEBAR_DECORATION=system
 export HOME="$KIT/firefox-home"

@@ -1,38 +1,51 @@
 # Board Browser Kit
 
-This repository contains the customer-facing install SOP and board-side scripts
-for running Firefox ESR directly on the Linux board GUI.
+This repository provides the board-side configuration and scripts for launching
+Firefox directly on the Linux board GUI.
 
-The browser is launched on the board itself through ADB-installed scripts. It
-does not open a browser on the PC or notebook.
+Firefox itself is downloaded from Mozilla's official download endpoint. This
+keeps this repository small and makes the customer SOP easier to maintain.
 
-## What This Installs
+## Install On The Board
 
-- Firefox ESR runtime for ARM64 Linux boards
-- Board launch command: `/data/local/tmp/board-browser-kit/board-open-firefox`
-- Local browser home page with quick links and a URL input
-- Network recovery helper for `eth0`
-- Automatic time sync helper for HTTPS certificate validity
-- systemd services for browser launch and time sync
-- Memory snapshot and CSV monitoring tools
-- Font configuration for Chinese / CJK text rendering
-- Wayland runtime workaround used by the tested board image
-
-## Customer Install
-
-Download the full release package from GitHub Releases, then run the installer
-on the board:
+Run these commands on the board:
 
 ```sh
 cd /data/local/tmp
-wget -O board-browser-kit-v1.0.tar.gz https://github.com/anan1999/firefoxinstall/releases/download/v1.0/board-browser-kit-v1.0.tar.gz
-tar -xzf board-browser-kit-v1.0.tar.gz
+wget -O firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz
+tar -xzf firefoxinstall-main.tar.gz
+rm -rf board-browser-kit
+mv firefoxinstall-main board-browser-kit
 cd board-browser-kit
-chmod +x install.sh
+chmod +x install.sh scripts/*
+./scripts/download-firefox-esr
 ./install.sh
 ```
 
-If `wget` is not available, use `curl -L -o board-browser-kit-v1.0.tar.gz <release-url>`.
+If `wget` is not available:
+
+```sh
+cd /data/local/tmp
+curl -L -o firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz
+tar -xzf firefoxinstall-main.tar.gz
+rm -rf board-browser-kit
+mv firefoxinstall-main board-browser-kit
+cd board-browser-kit
+chmod +x install.sh scripts/*
+./scripts/download-firefox-esr
+./install.sh
+```
+
+## Firefox Download Source
+
+The installer downloads Firefox ESR ARM64 from Mozilla:
+
+```text
+https://download.mozilla.org/?product=firefox-esr-latest-ssl&os=linux64-aarch64&lang=en-US
+```
+
+On July 8, 2026, this redirected to Firefox ESR `140.12.0esr` for
+`linux-aarch64`.
 
 ## Launch Browser
 
@@ -46,16 +59,14 @@ Open a specific page:
 /data/local/tmp/board-browser-kit/board-open-firefox https://www.youtube.com
 ```
 
-## Documentation
+## Included Board Settings
 
-See [docs/INSTALL_SOP.md](docs/INSTALL_SOP.md) for the full SOP,
-verification commands, memory monitoring commands, and uninstall steps.
+- Browser launch wrapper for Wayland
+- Local browser home page
+- Network recovery helper for `eth0`
+- Automatic time sync helper for HTTPS certificate validity
+- systemd service files
+- Memory snapshot and CSV monitoring tools
+- Optional support for board-specific libraries, fonts, and Wayland guard files
 
-## Release Package Note
-
-The Firefox runtime and native libraries are published as a GitHub Release asset
-instead of normal Git files. The full package should be named:
-
-```text
-board-browser-kit-v1.0.tar.gz
-```
+See [docs/INSTALL_SOP.md](docs/INSTALL_SOP.md) for the full SOP.

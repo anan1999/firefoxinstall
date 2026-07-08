@@ -1,7 +1,7 @@
-# Board Browser Kit GitHub Install SOP
+# Board Browser Kit Install SOP
 
-This package installs Firefox ESR on the board so the browser runs directly on
-the board GUI.
+This SOP installs the board-side browser settings from our GitHub repository
+and downloads Firefox ESR ARM64 from Mozilla's official download endpoint.
 
 Repository:
 
@@ -9,49 +9,77 @@ Repository:
 https://github.com/anan1999/firefoxinstall
 ```
 
-## Package
-
-Publish this file as a GitHub Release asset:
+Firefox download source:
 
 ```text
-board-browser-kit-v1.0.tar.gz
+https://download.mozilla.org/?product=firefox-esr-latest-ssl&os=linux64-aarch64&lang=en-US
 ```
 
-Use GitHub Releases for this package because the Firefox runtime may be too
-large for normal Git repository files.
+On July 8, 2026, the Mozilla link redirected to:
 
-## Online Install From GitHub
+```text
+https://download-installer.cdn.mozilla.net/pub/firefox/releases/140.12.0esr/linux-aarch64/en-US/firefox-140.12.0esr.tar.xz
+```
 
-Run these commands on the board:
+Use the `download.mozilla.org` URL in SOPs because it tracks the latest Firefox
+ESR ARM64 build.
+
+## Online Install On The Board
+
+Run these commands directly on the board:
 
 ```sh
 cd /data/local/tmp
-wget -O board-browser-kit-v1.0.tar.gz https://github.com/anan1999/firefoxinstall/releases/download/v1.0/board-browser-kit-v1.0.tar.gz
-tar -xzf board-browser-kit-v1.0.tar.gz
+wget -O firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz
+tar -xzf firefoxinstall-main.tar.gz
+rm -rf board-browser-kit
+mv firefoxinstall-main board-browser-kit
 cd board-browser-kit
-chmod +x install.sh
+chmod +x install.sh scripts/*
+./scripts/download-firefox-esr
 ./install.sh
 ```
 
-If `wget -O` is not supported, use:
+If `wget` is not supported, use `curl`:
 
 ```sh
 cd /data/local/tmp
-curl -L -o board-browser-kit-v1.0.tar.gz https://github.com/anan1999/firefoxinstall/releases/download/v1.0/board-browser-kit-v1.0.tar.gz
-tar -xzf board-browser-kit-v1.0.tar.gz
+curl -L -o firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz
+tar -xzf firefoxinstall-main.tar.gz
+rm -rf board-browser-kit
+mv firefoxinstall-main board-browser-kit
 cd board-browser-kit
-chmod +x install.sh
+chmod +x install.sh scripts/*
+./scripts/download-firefox-esr
 ./install.sh
 ```
 
-## Offline Install Through ADB
+## ADB Install From PC
 
-Run these commands on the PC:
+If the board cannot download from GitHub directly, download the repository ZIP
+or tarball on the PC first, then push it to the board:
 
 ```powershell
+curl.exe -L -o firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz
 adb root
-adb push board-browser-kit-v1.0.tar.gz /data/local/tmp/
-adb shell "cd /data/local/tmp && tar -xzf board-browser-kit-v1.0.tar.gz && cd board-browser-kit && chmod +x install.sh && ./install.sh"
+adb push firefoxinstall-main.tar.gz /data/local/tmp/
+adb shell "cd /data/local/tmp && tar -xzf firefoxinstall-main.tar.gz && rm -rf board-browser-kit && mv firefoxinstall-main board-browser-kit && cd board-browser-kit && chmod +x install.sh scripts/* && ./scripts/download-firefox-esr && ./install.sh"
+```
+
+## Manual Firefox Download Only
+
+If only Firefox needs to be refreshed:
+
+```sh
+cd /data/local/tmp/board-browser-kit
+./scripts/download-firefox-esr
+```
+
+To pin a specific Firefox ESR package, override `FIREFOX_ESR_URL`:
+
+```sh
+cd /data/local/tmp/board-browser-kit
+FIREFOX_ESR_URL="https://download-installer.cdn.mozilla.net/pub/firefox/releases/140.12.0esr/linux-aarch64/en-US/firefox-140.12.0esr.tar.xz" ./scripts/download-firefox-esr
 ```
 
 ## Launch Browser
@@ -95,6 +123,19 @@ Check memory:
 ```sh
 /data/local/tmp/board-browser-kit/board-memory-snapshot
 ```
+
+Start CSV memory logging:
+
+```sh
+/data/local/tmp/board-browser-kit/board-memory-monitor 5 /tmp/board-memory-monitor.csv
+```
+
+## Notes
+
+The tested board image needed extra runtime compatibility files, such as
+board-specific libraries, CJK font configuration, and a Wayland resize guard.
+The launch wrapper enables those files only when they exist under
+`/data/local/tmp/board-browser-kit`.
 
 ## Uninstall
 

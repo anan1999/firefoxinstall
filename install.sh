@@ -21,6 +21,7 @@ if [ ! -e "$KIT/board-open-firefox" ] && [ -e "$KIT/scripts/board-open-firefox" 
   cp "$KIT/scripts/board-open-firefox" "$KIT/board-open-firefox"
   cp "$KIT/scripts/board-network-up" "$KIT/board-network-up"
   cp "$KIT/scripts/board-time-sync" "$KIT/board-time-sync"
+  cp "$KIT/scripts/download-firefox-esr" "$KIT/download-firefox-esr" 2>/dev/null || true
   cp "$KIT/scripts/board-memory-snapshot" "$KIT/board-memory-snapshot" 2>/dev/null || true
   cp "$KIT/scripts/board-memory-monitor" "$KIT/board-memory-monitor" 2>/dev/null || true
   cp "$KIT/services/board-browser-ui.service" "$KIT/board-browser-ui.service"
@@ -35,7 +36,6 @@ board-time-sync
 board-browser-ui.service
 board-time-sync.service
 board-firefox-home.html
-libwayland_resize_guard.so
 "
 
 for f in $required_files; do
@@ -45,8 +45,15 @@ for f in $required_files; do
   fi
 done
 
+if [ ! -x "$KIT/firefox-esr/firefox/firefox" ] && [ -x "$KIT/download-firefox-esr" ]; then
+  echo "Firefox binary not found. Downloading Firefox ESR from Mozilla..."
+  "$KIT/download-firefox-esr"
+fi
+
 if [ ! -x "$KIT/firefox-esr/firefox/firefox" ]; then
   echo "ERROR: Firefox binary not found: $KIT/firefox-esr/firefox/firefox"
+  echo "Run this command first:"
+  echo "  $KIT/download-firefox-esr"
   exit 1
 fi
 
