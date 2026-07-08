@@ -18,16 +18,34 @@ while true; do
 
   firefox_rss=0
   firefox_count=0
-  for p in /proc/[0-9]*; do
-    cmd="$(tr '\0' ' ' < "$p/cmdline" 2>/dev/null || true)"
-    case "$cmd" in
-      *firefox*|*firefox-bin*)
-        rss="$(awk '/^VmRSS:/ { print $2 }' "$p/status" 2>/dev/null || echo 0)"
-        firefox_rss=$((firefox_rss + rss))
-        firefox_count=$((firefox_count + 1))
-        ;;
-    esac
-  done
+  if ps -eo rss,comm >/tmp/board-browser-monitor-ps.$$ 2>/dev/null; then
+    firefox_stats="$(awk '
+      function kb(v) {
+        n = v
+        unit = substr(v, length(v), 1)
+        if (unit == "g" || unit == "G") { sub(/[gG]$/, "", n); return n * 1024 * 1024 }
+        if (unit == "m" || unit == "M") { sub(/[mM]$/, "", n); return n * 1024 }
+        if (unit == "k" || unit == "K") { sub(/[kK]$/, "", n); return n }
+        return n
+      }
+      NR > 1 && $2 ~ /firefox/ { rss += kb($1); count += 1 }
+      END { printf "%d %d", rss, count }
+    ' /tmp/board-browser-monitor-ps.$$)"
+    rm -f /tmp/board-browser-monitor-ps.$$
+    firefox_rss="${firefox_stats%% *}"
+    firefox_count="${firefox_stats##* }"
+  else
+    for p in /proc/[0-9]*; do
+      name="$(cat "$p/comm" 2>/dev/null || true)"
+      case "$name" in
+        *firefox*|*firefox-bin*)
+          rss="$(awk '/^VmRSS:/ { print $2 }' "$p/status" 2>/dev/null || echo 0)"
+          firefox_rss=$((firefox_rss + rss))
+          firefox_count=$((firefox_count + 1))
+          ;;
+      esac
+    done
+  fi
 
   pressure_some="$(awk '/^some/ { for (i=1; i<=NF; i++) if ($i ~ /^avg10=/) { sub("avg10=", "", $i); print $i } }' /proc/pressure/memory 2>/dev/null || echo 0)"
   pressure_full="$(awk '/^full/ { for (i=1; i<=NF; i++) if ($i ~ /^avg10=/) { sub("avg10=", "", $i); print $i } }' /proc/pressure/memory 2>/dev/null || echo 0)"

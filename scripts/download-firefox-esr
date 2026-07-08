@@ -1,7 +1,12 @@
 #!/usr/bin/env sh
 set -eu
 
-KIT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+case "${SCRIPT_DIR##*/}" in
+  scripts) KIT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)" ;;
+  *) KIT="$SCRIPT_DIR" ;;
+esac
+KIT="${BOARD_BROWSER_KIT_DIR:-$KIT}"
 URL="${FIREFOX_ESR_URL:-https://download.mozilla.org/?product=firefox-esr-latest-ssl&os=linux64-aarch64&lang=en-US}"
 OUT="$KIT/downloads/firefox-esr-linux-aarch64.tar.xz"
 

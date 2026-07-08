@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
 set -eu
 
-KIT="/data/local/tmp/board-browser-kit"
+KIT="${BOARD_BROWSER_KIT_DIR:-/data/local/tmp/board-browser-kit}"
 FIREFOX="$KIT/firefox-esr/firefox/firefox"
 PROFILE="${FIREFOX_PROFILE_DIR:-$KIT/firefox-profile}"
-URL="${1:-file:///data/local/tmp/board-browser-kit/board-firefox-home.html}"
+URL="${1:-file://$KIT/board-firefox-home.html}"
 LOG="/tmp/firefox-board.log"
 RUNTIME="$KIT/runtime-root"
 

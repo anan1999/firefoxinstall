@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-KIT="/data/local/tmp/board-browser-kit"
+KIT="${BOARD_BROWSER_KIT_DIR:-/data/local/tmp/board-browser-kit}"
+INSTALL_SYSTEM="${BOARD_BROWSER_INSTALL_SYSTEM:-1}"
 SELF_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
 echo "Board Browser Kit installer"
@@ -59,41 +60,47 @@ fi
 
 chmod -R 755 "$KIT"
 
-echo "Installing command wrappers ..."
-cp "$KIT/board-open-firefox" /etc/board-open-firefox
-cp "$KIT/board-time-sync" /etc/board-time-sync
-chmod 755 /etc/board-open-firefox /etc/board-time-sync
+if [ "$INSTALL_SYSTEM" = "1" ]; then
+  echo "Installing command wrappers ..."
+  cp "$KIT/board-open-firefox" /etc/board-open-firefox
+  cp "$KIT/board-time-sync" /etc/board-time-sync
+  chmod 755 /etc/board-open-firefox /etc/board-time-sync
 
-echo "Installing systemd services ..."
-cp "$KIT/board-browser-ui.service" /etc/systemd/system/board-browser-ui.service
-cp "$KIT/board-time-sync.service" /etc/systemd/system/board-time-sync.service
-chmod 644 /etc/systemd/system/board-browser-ui.service /etc/systemd/system/board-time-sync.service
+  echo "Installing systemd services ..."
+  cp "$KIT/board-browser-ui.service" /etc/systemd/system/board-browser-ui.service
+  cp "$KIT/board-time-sync.service" /etc/systemd/system/board-time-sync.service
+  chmod 644 /etc/systemd/system/board-browser-ui.service /etc/systemd/system/board-time-sync.service
 
-if command -v systemctl >/dev/null 2>&1; then
-  systemctl daemon-reload || true
-  systemctl enable board-time-sync.service || true
-  systemctl enable board-browser-ui.service || true
-fi
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload || true
+    systemctl enable board-time-sync.service || true
+    systemctl enable board-browser-ui.service || true
+  fi
 
-echo "Installing post-boot time sync hook ..."
-if [ -f /etc/init.post_boot.sh ]; then
-  cp -n /etc/init.post_boot.sh /etc/init.post_boot.sh.before-board-browser-kit 2>/dev/null || true
-  if ! grep -q '/etc/board-time-sync' /etc/init.post_boot.sh; then
-    cat >> /etc/init.post_boot.sh <<'EOF'
+  echo "Installing post-boot time sync hook ..."
+  if [ -f /etc/init.post_boot.sh ]; then
+    cp -n /etc/init.post_boot.sh /etc/init.post_boot.sh.before-board-browser-kit 2>/dev/null || true
+    if ! grep -q '/etc/board-time-sync' /etc/init.post_boot.sh; then
+      cat >> /etc/init.post_boot.sh <<'EOF'
 
 if [ -x /etc/board-time-sync ]; then
 	( sleep 10; /bin/sh /etc/board-time-sync ) &
 fi
 EOF
-    chmod 755 /etc/init.post_boot.sh
+      chmod 755 /etc/init.post_boot.sh
+    fi
   fi
+else
+  echo "Skipping /etc and systemd installation because BOARD_BROWSER_INSTALL_SYSTEM=$INSTALL_SYSTEM"
 fi
 
 echo "Running network check ..."
 "$KIT/board-network-up" || true
 
-echo "Running time sync check ..."
-/etc/board-time-sync || true
+if [ "$INSTALL_SYSTEM" = "1" ]; then
+  echo "Running time sync check ..."
+  /etc/board-time-sync || true
+fi
 
 echo
 echo "Board Browser Kit installation completed."

@@ -20,22 +20,30 @@ cat /proc/pressure/memory 2>/dev/null || true
 
 echo
 echo "[browser service]"
-systemctl show board-browser-ui.service \
-  -p ActiveState -p SubState -p MainPID -p MemoryCurrent -p MemoryPeak -p CPUUsageNSec 2>/dev/null || true
+if command -v systemctl >/dev/null 2>&1; then
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 5 systemctl show board-browser-ui.service \
+      -p ActiveState -p SubState -p MainPID -p MemoryCurrent -p MemoryPeak -p CPUUsageNSec 2>/dev/null || true
+  else
+    systemctl show board-browser-ui.service \
+      -p ActiveState -p SubState -p MainPID -p MemoryCurrent -p MemoryPeak -p CPUUsageNSec 2>/dev/null || true
+  fi
+else
+  echo "systemctl not available"
+fi
 
 echo
 echo "[firefox processes]"
 found=0
 for p in /proc/[0-9]*; do
   pid="${p##*/}"
-  cmd="$(tr '\0' ' ' < "$p/cmdline" 2>/dev/null || true)"
-  case "$cmd" in
+  name="$(cat "$p/comm" 2>/dev/null || true)"
+  case "$name" in
     *firefox*|*firefox-bin*)
       found=1
       rss="$(awk '/^VmRSS:/ { print $2 " " $3 }' "$p/status" 2>/dev/null || true)"
       hwm="$(awk '/^VmHWM:/ { print $2 " " $3 }' "$p/status" 2>/dev/null || true)"
-      name="$(awk '/^Name:/ { print $2 }' "$p/status" 2>/dev/null || true)"
-      printf "%-8s rss=%-12s hwm=%-12s name=%s cmd=%s\n" "$pid" "${rss:-n/a}" "${hwm:-n/a}" "$name" "$cmd"
+      printf "%-8s rss=%-12s hwm=%-12s name=%s\n" "$pid" "${rss:-n/a}" "${hwm:-n/a}" "$name"
       ;;
   esac
 done
@@ -43,11 +51,29 @@ done
 
 echo
 echo "[top rss processes]"
-for p in /proc/[0-9]*; do
-  pid="${p##*/}"
-  rss="$(awk '/^VmRSS:/ { print $2 }' "$p/status" 2>/dev/null || echo 0)"
-  name="$(awk '/^Name:/ { print $2 }' "$p/status" 2>/dev/null || echo unknown)"
-  cmd="$(tr '\0' ' ' < "$p/cmdline" 2>/dev/null || true)"
-  printf "%10s KB pid=%-8s name=%-18s %s\n" "$rss" "$pid" "$name" "$cmd"
-done | sort -nr | head -n 25
-
+if ps -eo pid,rss,comm >/tmp/board-browser-ps.$$ 2>/dev/null; then
+  awk '
+    function kb(v) {
+      n = v
+      unit = substr(v, length(v), 1)
+      if (unit == "g" || unit == "G") { sub(/[gG]$/, "", n); return n * 1024 * 1024 }
+      if (unit == "m" || unit == "M") { sub(/[mM]$/, "", n); return n * 1024 }
+      if (unit == "k" || unit == "K") { sub(/[kK]$/, "", n); return n }
+      return n
+    }
+    NR > 1 {
+      rss = kb($2)
+      printf "%10d KB pid=%-8s name=%s\n", rss, $1, $3
+    }
+  ' /tmp/board-browser-ps.$$ |
+    sort -nr |
+    head -n 25
+  rm -f /tmp/board-browser-ps.$$
+else
+  for p in /proc/[0-9]*; do
+    pid="${p##*/}"
+    rss="$(awk '/^VmRSS:/ { print $2 }' "$p/status" 2>/dev/null || echo 0)"
+    name="$(cat "$p/comm" 2>/dev/null || echo unknown)"
+    printf "%10s KB pid=%-8s name=%s\n" "$rss" "$pid" "$name"
+  done | sort -nr | head -n 25
+fi
