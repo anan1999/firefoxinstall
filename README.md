@@ -4,29 +4,35 @@ This repository provides the board-side configuration and scripts for launching
 Firefox directly on the Linux board GUI.
 
 Firefox itself is downloaded from Mozilla's official download endpoint. This
-keeps this repository small and makes the customer SOP easier to maintain.
+keeps this repository small and avoids publishing large browser runtime files in
+GitHub Releases.
 
-## Install On The Board
+## Recommended Install From PC Through ADB
 
-Run these commands on the board:
+Run these commands on the PC that is connected to the board:
+
+```powershell
+adb root
+adb shell "cd /data/local/tmp && wget -O firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz && tar -xzf firefoxinstall-main.tar.gz && rm -rf board-browser-kit && mv firefoxinstall-main board-browser-kit && cd board-browser-kit && chmod +x install.sh scripts/* && ./scripts/download-firefox-esr && ./install.sh"
+```
+
+If the board does not have `wget`, use `curl`:
+
+```powershell
+adb root
+adb shell "cd /data/local/tmp && curl -L -o firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz && tar -xzf firefoxinstall-main.tar.gz && rm -rf board-browser-kit && mv firefoxinstall-main board-browser-kit && cd board-browser-kit && chmod +x install.sh scripts/* && ./scripts/download-firefox-esr && ./install.sh"
+```
+
+The `adb shell` command is issued from the PC, but the download, extraction, and
+installation run on the board.
+
+## Install Directly On The Board
+
+Use this only when operating from a terminal on the board itself:
 
 ```sh
 cd /data/local/tmp
 wget -O firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz
-tar -xzf firefoxinstall-main.tar.gz
-rm -rf board-browser-kit
-mv firefoxinstall-main board-browser-kit
-cd board-browser-kit
-chmod +x install.sh scripts/*
-./scripts/download-firefox-esr
-./install.sh
-```
-
-If `wget` is not available:
-
-```sh
-cd /data/local/tmp
-curl -L -o firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz
 tar -xzf firefoxinstall-main.tar.gz
 rm -rf board-browser-kit
 mv firefoxinstall-main board-browser-kit
@@ -47,16 +53,16 @@ https://download.mozilla.org/?product=firefox-esr-latest-ssl&os=linux64-aarch64&
 On July 8, 2026, this redirected to Firefox ESR `140.12.0esr` for
 `linux-aarch64`.
 
-## Launch Browser
+## Launch Browser From PC Through ADB
 
-```sh
-/data/local/tmp/board-browser-kit/board-open-firefox
+```powershell
+adb shell /data/local/tmp/board-browser-kit/board-open-firefox
 ```
 
 Open a specific page:
 
-```sh
-/data/local/tmp/board-browser-kit/board-open-firefox https://www.youtube.com
+```powershell
+adb shell /data/local/tmp/board-browser-kit/board-open-firefox https://www.youtube.com
 ```
 
 ## Included Board Settings
