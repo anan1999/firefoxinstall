@@ -9,10 +9,10 @@ repository only stores the board configuration and helper scripts.
 Run these commands on the PC connected to the board:
 
 ```powershell
-curl.exe -L -o firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz
+curl.exe -L -o board-browser-kit-main.tar.gz https://github.com/anan1999/board-browser-kit/archive/refs/heads/main.tar.gz
 adb root
-adb push firefoxinstall-main.tar.gz /data/local/tmp/
-adb shell 'cd /data/local/tmp && rm -rf board-browser-kit && tar -xzf firefoxinstall-main.tar.gz && EXTRACT_DIR=$(tar -tzf firefoxinstall-main.tar.gz | sed -n 1p | cut -d/ -f1) && mv $EXTRACT_DIR board-browser-kit && cd board-browser-kit && chmod +x install.sh scripts/* && sh install.sh'
+adb push board-browser-kit-main.tar.gz /data/local/tmp/
+adb shell 'cd /data/local/tmp && rm -rf board-browser-kit && tar -xzf board-browser-kit-main.tar.gz && EXTRACT_DIR=$(tar -tzf board-browser-kit-main.tar.gz | sed -n 1p | cut -d/ -f1) && mv $EXTRACT_DIR board-browser-kit && cd board-browser-kit && chmod +x install.sh scripts/* && sh install.sh'
 ```
 
 The GitHub package is downloaded on the PC and pushed to the board through ADB.

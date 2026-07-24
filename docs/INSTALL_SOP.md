@@ -141,7 +141,7 @@ adb pull /tmp/board-memory-monitor.csv .
 
 ## Smoke Test Results
 
-Validated on July 8, 2026:
+Validated on July 24, 2026:
 
 - `adb devices` detected the board.
 - Board time was correct.
@@ -153,11 +153,16 @@ Validated on July 8, 2026:
 - Board could extract the tarball.
 - `chmod +x install.sh scripts/*` fixed executable permissions from the GitHub archive.
 - `scripts/download-firefox-esr` downloaded and extracted Firefox ESR ARM64 from Mozilla.
+- On a clean board image, Firefox then aborted because GTK `gdk-pixbuf` loaders
+  and the hicolor icon theme were not available. The full GUI installation is
+  therefore not yet PASS on a clean board.
 
 Known issue:
 
 - Board-side `wget` could not download the GitHub archive because of a TLS reset.
 - Mozilla Firefox download with board-side `wget` worked.
+- Resolve the GTK runtime resources before releasing this package for clean
+  board images.
 
 ## Uninstall
 
