@@ -17,6 +17,11 @@ fi
 
 cd "$KIT"
 
+# GitHub tar archives and some board tar implementations may not preserve
+# executable bits. Normalize the bundled runtime before checking the binary.
+chmod -R 755 "$KIT/firefox-esr" "$KIT/firefox-libs" "$KIT/fontconfig" "$KIT/fonts" 2>/dev/null || true
+chmod +x "$KIT"/board-* "$KIT/download-firefox-esr" 2>/dev/null || true
+
 if [ ! -e "$KIT/board-open-firefox" ] && [ -e "$KIT/scripts/board-open-firefox" ]; then
   echo "Normalizing repository layout ..."
   cp "$KIT/scripts/board-open-firefox" "$KIT/board-open-firefox"
@@ -28,6 +33,7 @@ if [ ! -e "$KIT/board-open-firefox" ] && [ -e "$KIT/scripts/board-open-firefox" 
   cp "$KIT/services/board-browser-ui.service" "$KIT/board-browser-ui.service"
   cp "$KIT/services/board-time-sync.service" "$KIT/board-time-sync.service"
   cp "$KIT/ui/board-firefox-home.html" "$KIT/board-firefox-home.html"
+  chmod +x "$KIT"/board-* "$KIT/download-firefox-esr" 2>/dev/null || true
 fi
 
 required_files="

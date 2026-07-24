@@ -12,11 +12,13 @@ Run these commands on the PC connected to the board:
 curl.exe -L -o firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz
 adb root
 adb push firefoxinstall-main.tar.gz /data/local/tmp/
-adb shell "cd /data/local/tmp && tar -xzf firefoxinstall-main.tar.gz && rm -rf board-browser-kit && mv firefoxinstall-main board-browser-kit && cd board-browser-kit && chmod +x install.sh scripts/* && ./scripts/download-firefox-esr && ./install.sh"
+adb shell 'cd /data/local/tmp && rm -rf board-browser-kit && tar -xzf firefoxinstall-main.tar.gz && EXTRACT_DIR=$(tar -tzf firefoxinstall-main.tar.gz | sed -n 1p | cut -d/ -f1) && mv $EXTRACT_DIR board-browser-kit && cd board-browser-kit && chmod +x install.sh scripts/* && sh install.sh'
 ```
 
 The GitHub package is downloaded on the PC and pushed to the board through ADB.
-The Firefox download and installation run on the board.
+The Firefox download and installation run on the board. The installer uses the
+board's Linux `/bin/sh`; do not use `/system/bin/sh` or assume an Android
+directory layout.
 
 ## Launch
 

@@ -56,7 +56,7 @@ Run these commands on the PC connected to the board:
 curl.exe -L -o firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz
 adb root
 adb push firefoxinstall-main.tar.gz /data/local/tmp/
-adb shell "cd /data/local/tmp && tar -xzf firefoxinstall-main.tar.gz && rm -rf board-browser-kit && mv firefoxinstall-main board-browser-kit && cd board-browser-kit && chmod +x install.sh scripts/* && ./scripts/download-firefox-esr && ./install.sh"
+adb shell 'cd /data/local/tmp && rm -rf board-browser-kit && tar -xzf firefoxinstall-main.tar.gz && EXTRACT_DIR=$(tar -tzf firefoxinstall-main.tar.gz | sed -n 1p | cut -d/ -f1) && mv $EXTRACT_DIR board-browser-kit && cd board-browser-kit && chmod +x install.sh scripts/* && sh install.sh'
 ```
 
 Reason for this flow:
@@ -64,6 +64,7 @@ Reason for this flow:
 - The PC downloads the GitHub package.
 - ADB transfers the package to the board.
 - The board extracts the package, downloads Firefox from Mozilla, and installs the board settings.
+- The command uses Linux `/bin/sh`; `/system/bin/sh` is for Android and is not used on this board.
 - This avoids relying on the board's `wget` TLS compatibility with GitHub.
 
 ## Optional Direct Board Download
@@ -78,8 +79,7 @@ rm -rf board-browser-kit
 mv firefoxinstall-main board-browser-kit
 cd board-browser-kit
 chmod +x install.sh scripts/*
-./scripts/download-firefox-esr
-./install.sh
+sh install.sh
 ```
 
 On the tested board, direct GitHub download from board-side `wget` failed:
