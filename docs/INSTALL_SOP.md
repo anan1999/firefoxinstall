@@ -1,171 +1,212 @@
-# Board Browser Kit Install SOP
+# Board Browser Kit Installation SOP
 
-This SOP installs Firefox support on the Linux board GUI. The GitHub repository
-contains only configuration and scripts. Firefox ESR ARM64 is downloaded from
-Mozilla during installation.
+## 1. Purpose and Distribution Model
 
-## What Board Browser Kit Configures
+This SOP installs Mozilla Firefox ESR on the QCS8550 Linux board and starts it
+directly on the board's Wayland GUI. The browser does not run on, or stream
+back to, the connected PC. ADB is used only to transfer the installer and run
+board-side commands.
 
-`board-browser-kit` is not only a Firefox downloader. It also installs the
-board-side settings needed to run Firefox directly on the Linux GUI.
+The public Board Browser Kit package contains only:
 
-| Item | Path | Purpose |
-| --- | --- | --- |
-| Firefox launcher | `/data/local/tmp/board-browser-kit/board-open-firefox` | Starts Firefox on the board GUI through Wayland. It sets `MOZ_ENABLE_WAYLAND`, `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, Firefox profile/cache paths, optional fontconfig, optional runtime libraries, and optional Wayland guard preload. |
-| System launcher copy | `/etc/board-open-firefox` | Provides a stable system-level command path for services or manual launch. |
-| Browser home page | `/data/local/tmp/board-browser-kit/board-firefox-home.html` | Local start page with URL input and quick links. This gives the user a simple UI after Firefox opens. |
-| Network helper | `/data/local/tmp/board-browser-kit/board-network-up` | Checks board network before launching Firefox. It brings up `eth0`, runs DHCP through `udhcpc`, and repairs the default route when needed. |
-| Time sync helper | `/etc/board-time-sync` | Syncs board time through NTP. This avoids HTTPS certificate failures when board time is wrong. |
-| Browser service | `/etc/systemd/system/board-browser-ui.service` | Optional systemd service for launching the browser after the GUI/Wayland socket is ready. |
-| Time sync service | `/etc/systemd/system/board-time-sync.service` | Runs time synchronization during boot. |
-| Post-boot hook | `/etc/init.post_boot.sh` | Adds a delayed time-sync call after boot when this file exists on the board image. |
-| Memory snapshot | `/data/local/tmp/board-browser-kit/board-memory-snapshot` | Prints one-time RAM, swap, memory pressure, browser service state, Firefox RSS, and top memory processes. |
-| Memory monitor | `/data/local/tmp/board-browser-kit/board-memory-monitor` | Writes a CSV memory log at a fixed interval for long-running observation. |
+- Installation, launch, network, time-sync, and memory-monitoring scripts
+- A local browser home page
+- systemd service definitions
+- The Board Browser Kit Wayland compatibility source and ARM64 binary
+- A pinned manifest of upstream package URLs and SHA-256 values
+- Documentation and license notices
 
-Optional compatibility files are enabled only when they exist:
+It does not contain Firefox, Debian packages, Noto fonts, or GNOME icon themes.
+The board downloads those files from upstream servers during installation.
+See `THIRD_PARTY_NOTICES.md` before delivering a configured browser to a
+customer.
 
-| Optional item | Path | Purpose |
-| --- | --- | --- |
-| Runtime libraries | `/data/local/tmp/board-browser-kit/firefox-libs/` | Adds extra `.so` search paths through `LD_LIBRARY_PATH` when the board image does not provide all Firefox dependencies. |
-| Font files | `/data/local/tmp/board-browser-kit/fonts/` | Stores optional CJK fonts such as Noto Sans TC. |
-| Fontconfig | `/data/local/tmp/board-browser-kit/fontconfig/fonts.conf` | Points Firefox/fontconfig to the bundled fonts so Chinese text can render correctly. |
-| Wayland guard | `/data/local/tmp/board-browser-kit/libwayland_resize_guard.so` | Optional `LD_PRELOAD` workaround for board images that hit Wayland resize protocol issues. |
+## 2. Requirements
 
-## Download Sources
+Board requirements:
 
-Board Browser Kit repository:
+- Linux aarch64
+- Root access through ADB
+- Active Ethernet connection
+- Working DNS and default route
+- `sh`, `wget` or `curl`, `tar`, `xz`, `python3`, and `sha256sum`
+- Weston/Wayland socket at `/run/user/root/wayland-1`
+- At least 700 MB free under `/data/local/tmp`
+
+PC requirements:
+
+- ADB
+- `curl.exe`
+- Access to GitHub
+
+## 3. Upstream Downloads
+
+| Component | Pinned version | Upstream source | Purpose |
+| --- | --- | --- | --- |
+| Firefox ESR | 140.12.0esr, Linux aarch64, en-US | `https://archive.mozilla.org/pub/firefox/releases/140.12.0esr/` | Browser engine and GUI |
+| GTK runtime | Debian Buster ARM64 package set | `https://archive.debian.org/debian/` | GTK, ATK, Cairo, X11 compatibility libraries |
+| Noto CJK | Debian `fonts-noto-cjk` | `https://archive.debian.org/debian/` | Traditional Chinese and CJK text rendering |
+| Icon themes | Debian `adwaita-icon-theme` and `hicolor-icon-theme` | `https://archive.debian.org/debian/` | GTK toolbar and dialog icons |
+
+Firefox 140.12.0esr is pinned because a later tested ESR build sent an
+`xdg_toplevel.set_min_size` request that the board's Weston compositor
+rejected. Package paths, versions, and SHA-256 values are recorded in:
 
 ```text
-https://github.com/anan1999/firefoxinstall
+manifests/debian-buster-arm64.txt
 ```
 
-Firefox ESR ARM64 official Mozilla endpoint:
+The tested board's `wget` reports that TLS certificate validation is not
+implemented. Therefore, the installer does not trust hashes downloaded in the
+same session. Firefox and Debian package hashes are pinned inside Board Browser
+Kit, and installation stops if a downloaded file does not match.
 
-```text
-https://download.mozilla.org/?product=firefox-esr-latest-ssl&os=linux64-aarch64&lang=en-US
-```
+## 4. Install Through ADB
 
-On July 8, 2026, this redirected to Firefox ESR `140.12.0esr` for
-`linux-aarch64`.
-
-## Recommended Install From PC Through ADB
-
-Run these commands on the PC connected to the board:
+Run on the Windows PC:
 
 ```powershell
-curl.exe -L -o firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz
+curl.exe -L -o board-browser-kit-v1.1-online-installer.tar.gz https://github.com/anan1999/board-browser-kit/releases/download/v1.1/board-browser-kit-v1.1-online-installer.tar.gz
 adb root
-adb push firefoxinstall-main.tar.gz /data/local/tmp/
-adb shell 'cd /data/local/tmp && rm -rf board-browser-kit && tar -xzf firefoxinstall-main.tar.gz && EXTRACT_DIR=$(tar -tzf firefoxinstall-main.tar.gz | sed -n 1p | cut -d/ -f1) && mv $EXTRACT_DIR board-browser-kit && cd board-browser-kit && chmod +x install.sh scripts/* && sh install.sh'
+adb push board-browser-kit-v1.1-online-installer.tar.gz /data/local/tmp/
+adb shell 'cd /data/local/tmp && rm -rf board-browser-kit && tar -xzf board-browser-kit-v1.1-online-installer.tar.gz && cd board-browser-kit && sh install.sh'
 ```
 
-Reason for this flow:
+The final command runs on the Linux board. Keep it inside single quotes in
+PowerShell so expressions such as `$VAR` are interpreted by the board shell,
+not by PowerShell.
 
-- The PC downloads the GitHub package.
-- ADB transfers the package to the board.
-- The board extracts the package, downloads Firefox from Mozilla, and installs the board settings.
-- The command uses Linux `/bin/sh`; `/system/bin/sh` is for Android and is not used on this board.
-- This avoids relying on the board's `wget` TLS compatibility with GitHub.
+The installer performs these operations:
 
-## Optional Direct Board Download
+1. Normalizes GitHub archive file permissions and repository layout.
+2. Brings up `eth0`, requests DHCP, and repairs the default route if needed.
+3. Downloads Firefox ESR from Mozilla and verifies its pinned SHA-256.
+4. Downloads the pinned Debian ARM64 packages and verifies every SHA-256.
+5. Extracts package payloads into a private runtime without modifying the root
+   filesystem package database.
+6. Retains Debian copyright files under
+   `debian-runtime/usr/share/doc/<package>/copyright`.
+7. Builds a local gdk-pixbuf loader cache and fontconfig configuration.
+8. Installs launch/time helpers and optional systemd services.
+9. Removes pending Firefox updater files and applies the tested update policy.
 
-Use this only if the board can download GitHub archives with `wget`:
+## 5. GUI and Compatibility Configuration
 
-```sh
-cd /data/local/tmp
-wget -O firefoxinstall-main.tar.gz https://github.com/anan1999/firefoxinstall/archive/refs/heads/main.tar.gz
-tar -xzf firefoxinstall-main.tar.gz
-rm -rf board-browser-kit
-mv firefoxinstall-main board-browser-kit
-cd board-browser-kit
-chmod +x install.sh scripts/*
-sh install.sh
-```
+`board-open-firefox` loads `/etc/profile.d/qim-sdk.sh` when it exists, then
+applies the board-specific browser environment:
 
-On the tested board, direct GitHub download from board-side `wget` failed:
+| Setting | Purpose |
+| --- | --- |
+| `XDG_RUNTIME_DIR` | Points applications to the runtime directory containing the Wayland socket. |
+| `WAYLAND_DISPLAY=wayland-1` | Selects the Weston display used by the board GUI. |
+| `MOZ_ENABLE_WAYLAND=1` and `GDK_BACKEND=wayland` | Makes Firefox and GTK render directly through Wayland. |
+| `LD_LIBRARY_PATH` | Adds the private Debian GTK runtime before the board's system libraries. |
+| `GDK_PIXBUF_MODULE_FILE` | Selects the generated image-loader cache for PNG, JPEG, and other GTK images. |
+| `XDG_DATA_DIRS` | Makes GTK find the downloaded Adwaita and hicolor icon themes. |
+| `FONTCONFIG_FILE` | Makes fontconfig scan the downloaded Noto CJK font directory. |
+| `HOME`, `XDG_CACHE_HOME`, `XDG_CONFIG_HOME` | Keeps browser data under the kit directory instead of the board's system root home. |
+| `MOZ_DISABLE_*_SANDBOX` | Avoids namespace and permission incompatibilities on this embedded Linux image. This reduces browser isolation and must be included in the product security review. |
+| `LD_PRELOAD=libwayland_resize_guard.so` | Filters Wayland resize requests that the tested Weston compositor rejects. The corresponding C source is included under `compat/`. |
+
+The Firefox update policy is enabled by default:
 
 ```text
-wget: TLS error from peer (alert code 80): 80
-wget: error getting response: Connection reset by peer
+BOARD_BROWSER_DISABLE_FIREFOX_UPDATES=1
 ```
 
-For that board, use the PC download plus `adb push` flow.
+This prevents an automatic upgrade to an untested build that may break the
+board's Weston compatibility. Set the variable to `0` before `install.sh` to
+omit this policy, but validate the newer Firefox build before customer use.
 
-## Launch Browser
+The browser systemd service includes:
+
+```text
+SELinuxContext=system_u:system_r:unconfined_t:s0-s15:c0.c1023
+```
+
+This asks systemd to run the service in the board's permitted unconfined
+SELinux domain. Without the correct domain, SELinux can deny execution of
+Firefox stored under `/data/local/tmp`. The exact policy is image-specific and
+must be reviewed if the production SELinux policy changes.
+
+## 6. Launch and Verify
+
+Open the local home page:
 
 ```powershell
 adb shell /data/local/tmp/board-browser-kit/board-open-firefox
 ```
 
-Open a specific URL:
+Open an external site:
 
 ```powershell
 adb shell /data/local/tmp/board-browser-kit/board-open-firefox https://www.google.com
+adb shell /data/local/tmp/board-browser-kit/board-open-firefox https://www.youtube.com
 ```
 
-## Verify
-
-Network:
+Network and time:
 
 ```powershell
 adb shell /data/local/tmp/board-browser-kit/board-network-up
 adb shell ping -c 2 google.com
-```
-
-Time sync:
-
-```powershell
 adb shell /etc/board-time-sync
 adb shell date
 ```
 
-Service state:
+Firefox processes:
+
+```powershell
+adb shell "ps -ef | grep firefox | grep -v grep"
+```
+
+Services:
 
 ```powershell
 adb shell systemctl status board-browser-ui.service
 adb shell systemctl status board-time-sync.service
 ```
 
-Memory snapshot:
+One-time memory snapshot:
 
 ```powershell
 adb shell /data/local/tmp/board-browser-kit/board-memory-snapshot
 ```
 
-Start CSV memory logging:
+Continuous CSV memory log:
 
 ```powershell
 adb shell "/data/local/tmp/board-browser-kit/board-memory-monitor 5 /tmp/board-memory-monitor.csv >/tmp/board-memory-monitor.log 2>&1 &"
 adb pull /tmp/board-memory-monitor.csv .
 ```
 
-## Smoke Test Results
+The clean online-install smoke test on July 24, 2026 verified:
 
-Validated on July 24, 2026:
+- Mozilla and Debian downloads completed on the board.
+- All pinned SHA-256 checks passed.
+- 45 Debian packages were extracted and their license files retained.
+- The local gdk-pixbuf cache, Noto CJK fonts, and icon themes initialized.
+- Firefox ESR Build ID `20260609153453` opened Google on Wayland.
+- Main, Socket, RDD, Utility, WebExtensions, and Web Content processes stayed
+  running.
+- A memory snapshot reported approximately 466 MB RSS for the main Firefox
+  process during the Google test; total usage changes with pages and tabs.
 
-- `adb devices` detected the board.
-- Board time was correct.
-- Board had `wget`, `tar`, and `xz`.
-- Board could ping `github.com`.
-- Board could ping `download.mozilla.org`.
-- PC could download the GitHub tarball with `curl.exe`.
-- `adb push` transferred the tarball to the board.
-- Board could extract the tarball.
-- `chmod +x install.sh scripts/*` fixed executable permissions from the GitHub archive.
-- `scripts/download-firefox-esr` downloaded and extracted Firefox ESR ARM64 from Mozilla.
-- On a clean board image, Firefox then aborted because GTK `gdk-pixbuf` loaders
-  and the hicolor icon theme were not available. The full GUI installation is
-  therefore not yet PASS on a clean board.
+Non-fatal log warnings may include missing PCI GPU detection, accessibility
+DBus, and unavailable `/dev/video0` or `/dev/video1`.
 
-Known issue:
+## 7. Disk Cleanup
 
-- Board-side `wget` could not download the GitHub archive because of a TLS reset.
-- Mozilla Firefox download with board-side `wget` worked.
-- Resolve the GTK runtime resources before releasing this package for clean
-  board images.
-
-## Uninstall
+After a successful installation, downloaded archives are no longer required:
 
 ```powershell
-adb shell "systemctl disable board-browser-ui.service 2>/dev/null || true; systemctl disable board-time-sync.service 2>/dev/null || true; rm -f /etc/systemd/system/board-browser-ui.service; rm -f /etc/systemd/system/board-time-sync.service; rm -f /etc/board-open-firefox; rm -f /etc/board-time-sync; rm -rf /data/local/tmp/board-browser-kit; systemctl daemon-reload 2>/dev/null || true"
+adb shell "rm -rf /data/local/tmp/board-browser-kit/downloads"
+```
+
+This recovered approximately 185 MB in the tested installation. Do not remove
+`firefox-esr` or `debian-runtime`.
+
+## 8. Uninstall
+
+```powershell
+adb shell "systemctl disable board-browser-ui.service 2>/dev/null || true; systemctl disable board-time-sync.service 2>/dev/null || true; rm -f /etc/systemd/system/board-browser-ui.service /etc/systemd/system/board-time-sync.service /etc/board-open-firefox /etc/board-time-sync; rm -rf /data/local/tmp/board-browser-kit; systemctl daemon-reload 2>/dev/null || true"
 ```

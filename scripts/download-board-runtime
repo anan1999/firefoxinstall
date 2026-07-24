@@ -1,0 +1,166 @@
+#!/usr/bin/env sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+case "${SCRIPT_DIR##*/}" in
+  scripts) KIT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)" ;;
+  *) KIT="$SCRIPT_DIR" ;;
+esac
+KIT="${BOARD_BROWSER_KIT_DIR:-$KIT}"
+MIRROR="${DEBIAN_MIRROR:-https://archive.debian.org/debian}"
+INDEX_URL="${DEBIAN_PACKAGES_URL:-$MIRROR/dists/buster/main/binary-arm64/Packages.xz}"
+DOWNLOADS="$KIT/downloads/debian"
+RUNTIME="$KIT/debian-runtime"
+INDEX_XZ="$DOWNLOADS/Packages.xz"
+INDEX="$DOWNLOADS/Packages"
+MANIFEST="$DOWNLOADS/manifest.txt"
+PINNED_MANIFEST="${DEBIAN_MANIFEST:-$KIT/manifests/debian-buster-arm64.txt}"
+HELPER_DIR="$KIT"
+if [ ! -f "$HELPER_DIR/debian_package_manifest.py" ]; then
+  HELPER_DIR="$KIT/scripts"
+fi
+
+# This is the tested GTK/X11 compatibility subset for the QCS8550 Linux image.
+# Package payloads retain their /usr/share/doc/* copyright files.
+PACKAGES="
+libgtk-3-0
+libgdk-pixbuf2.0-0
+libgdk-pixbuf2.0-bin
+libgdk-pixbuf2.0-common
+libatk1.0-0
+libatk-bridge2.0-0
+libatspi2.0-0
+libepoxy0
+libcairo2
+libcairo-gobject2
+libpixman-1-0
+libfontconfig1
+libfreetype6
+libpng16-16
+libx11-6
+libx11-xcb1
+libx11-data
+libxi6
+libxcomposite1
+libxdamage1
+libxfixes3
+libxinerama1
+libxrandr2
+libxcursor1
+libxext6
+libxcb1
+libxcb-shm0
+libxcb-render0
+libxrender1
+libxau6
+libxdmcp6
+libgraphite2-3
+libthai0
+libdatrie1
+libffi6
+libpcre3
+libbsd0
+libjpeg62-turbo
+libtiff5
+libjbig0
+libwebp6
+libwebpdemux2
+adwaita-icon-theme
+hicolor-icon-theme
+fonts-noto-cjk
+"
+
+download() {
+  url="$1"
+  output="$2"
+  if command -v wget >/dev/null 2>&1; then
+    wget -O "$output" "$url"
+  elif command -v curl >/dev/null 2>&1; then
+    curl -L -o "$output" "$url"
+  else
+    echo "ERROR: wget or curl is required."
+    exit 1
+  fi
+}
+
+if [ "$(uname -m)" != "aarch64" ]; then
+  echo "ERROR: this runtime manifest is only for Linux aarch64."
+  exit 1
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "ERROR: python3 is required to extract Debian packages."
+  exit 1
+fi
+if ! command -v xz >/dev/null 2>&1; then
+  echo "ERROR: xz is required to read the Debian package index."
+  exit 1
+fi
+if ! command -v sha256sum >/dev/null 2>&1; then
+  echo "ERROR: sha256sum is required to verify downloaded packages."
+  exit 1
+fi
+
+mkdir -p "$DOWNLOADS" "$RUNTIME"
+if [ -f "$PINNED_MANIFEST" ]; then
+  echo "Using pinned Debian package manifest: $PINNED_MANIFEST"
+  cp "$PINNED_MANIFEST" "$MANIFEST"
+else
+  echo "Pinned manifest not found; resolving packages from Debian index..."
+  echo "URL: $INDEX_URL"
+  download "$INDEX_URL" "$INDEX_XZ"
+  xz -dc "$INDEX_XZ" > "$INDEX"
+  python3 "$HELPER_DIR/debian_package_manifest.py" "$INDEX" $PACKAGES > "$MANIFEST"
+fi
+
+while IFS='|' read -r package version filename expected_sha; do
+  [ -n "$package" ] || continue
+  deb="$DOWNLOADS/${filename##*/}"
+  actual_sha=""
+  if [ -f "$deb" ]; then
+    actual_sha="$(sha256sum "$deb" | awk '{print $1}')"
+  fi
+  if [ "$actual_sha" = "$expected_sha" ]; then
+    echo "Using verified cached package: $package $version"
+  else
+    echo "Downloading $package $version..."
+    download "$MIRROR/$filename" "$deb"
+  fi
+
+  actual_sha="$(sha256sum "$deb" | awk '{print $1}')"
+  if [ "$actual_sha" != "$expected_sha" ]; then
+    echo "ERROR: SHA-256 mismatch for $package"
+    exit 1
+  fi
+
+  member_dir="$DOWNLOADS/member-$package"
+  rm -rf "$member_dir"
+  data_archive="$(python3 "$HELPER_DIR/extract_deb_data.py" "$deb" "$member_dir")"
+  tar -xf "$data_archive" -C "$RUNTIME"
+  rm -rf "$member_dir"
+done < "$MANIFEST"
+
+module_dir="$RUNTIME/usr/lib/aarch64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders"
+query_loaders="$RUNTIME/usr/lib/aarch64-linux-gnu/gdk-pixbuf-2.0/gdk-pixbuf-query-loaders"
+cache_file="$RUNTIME/usr/lib/aarch64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache"
+runtime_libs="$RUNTIME/usr/lib/aarch64-linux-gnu:$RUNTIME/usr/lib"
+
+if [ -x "$query_loaders" ] && [ -d "$module_dir" ]; then
+  echo "Generating gdk-pixbuf loader cache..."
+  LD_LIBRARY_PATH="$runtime_libs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    GDK_PIXBUF_MODULEDIR="$module_dir" \
+    "$query_loaders" > "$cache_file"
+fi
+
+mkdir -p "$KIT/fontconfig"
+cat > "$KIT/fontconfig/fonts.conf" <<EOF
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
+  <dir>$RUNTIME/usr/share/fonts</dir>
+  <cachedir>$KIT/font-cache</cachedir>
+</fontconfig>
+EOF
+
+echo "Board runtime installed at: $RUNTIME"
+echo "Third-party license files: $RUNTIME/usr/share/doc/*/copyright"

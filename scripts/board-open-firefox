@@ -3,10 +3,22 @@ set -eu
 
 KIT="${BOARD_BROWSER_KIT_DIR:-/data/local/tmp/board-browser-kit}"
 FIREFOX="$KIT/firefox-esr/firefox/firefox"
+GTK_RUNTIME_ROOT="${GTK_RUNTIME_ROOT:-$KIT/midori-browser}"
+BROWSER_RUNTIME_ROOT="${BROWSER_RUNTIME_ROOT:-$KIT/browser}"
+DEBIAN_RUNTIME_ROOT="${DEBIAN_RUNTIME_ROOT:-$KIT/debian-runtime}"
 PROFILE="${FIREFOX_PROFILE_DIR:-$KIT/firefox-profile}"
 URL="${1:-file://$KIT/board-firefox-home.html}"
 LOG="/tmp/firefox-board.log"
 RUNTIME="$KIT/runtime-root"
+
+if [ -r /etc/profile.d/qim-sdk.sh ]; then
+  # Load the board vendor's Wayland/QIM environment before applying overrides.
+  LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
+  GST_PLUGIN_PATH="${GST_PLUGIN_PATH:-}"
+  PYTHONPATH="${PYTHONPATH:-}"
+  export LD_LIBRARY_PATH GST_PLUGIN_PATH PYTHONPATH
+  . /etc/profile.d/qim-sdk.sh
+fi
 
 mkdir -p "$PROFILE" "$RUNTIME" /run/user/root
 chmod 700 "$RUNTIME"
@@ -24,22 +36,29 @@ export MOZ_DISABLE_GMP_SANDBOX=1
 export MOZ_DISABLE_RDD_SANDBOX=1
 export MOZ_DISABLE_SOCKET_PROCESS_SANDBOX=1
 export NO_AT_BRIDGE=1
+debian_libs="$DEBIAN_RUNTIME_ROOT/usr/lib/aarch64-linux-gnu:$DEBIAN_RUNTIME_ROOT/usr/lib"
 if [ -d "$KIT/firefox-libs" ]; then
-  export LD_LIBRARY_PATH="$KIT/firefox-libs:/usr/lib:/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  export LD_LIBRARY_PATH="$debian_libs:$KIT/firefox-libs:/usr/lib:/usr/lib/aarch64-linux-gnu:$BROWSER_RUNTIME_ROOT/lib:$BROWSER_RUNTIME_ROOT/lib/pulseaudio${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 else
-  export LD_LIBRARY_PATH="/usr/lib:/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  export LD_LIBRARY_PATH="$debian_libs:/usr/lib:/usr/lib/aarch64-linux-gnu:$BROWSER_RUNTIME_ROOT/lib:$BROWSER_RUNTIME_ROOT/lib/pulseaudio${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 if [ -f "$KIT/libwayland_resize_guard.so" ]; then
   export LD_PRELOAD="$KIT/libwayland_resize_guard.so${LD_PRELOAD:+:$LD_PRELOAD}"
 fi
 export GDK_BACKEND=wayland
-if [ -f "$KIT/gdk-pixbuf/loaders.cache" ]; then
+if [ -f "$DEBIAN_RUNTIME_ROOT/usr/lib/aarch64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache" ]; then
+  export GDK_PIXBUF_MODULE_FILE="$DEBIAN_RUNTIME_ROOT/usr/lib/aarch64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache"
+  export GDK_PIXBUF_MODULEDIR="$DEBIAN_RUNTIME_ROOT/usr/lib/aarch64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders"
+elif [ -f "$GTK_RUNTIME_ROOT/usr/lib/aarch64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache" ]; then
+  export GDK_PIXBUF_MODULE_FILE="$GTK_RUNTIME_ROOT/usr/lib/aarch64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache"
+  export GDK_PIXBUF_MODULEDIR="$GTK_RUNTIME_ROOT/usr/lib/aarch64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders"
+elif [ -f "$KIT/gdk-pixbuf/loaders.cache" ]; then
   export GDK_PIXBUF_MODULE_FILE="$KIT/gdk-pixbuf/loaders.cache"
-fi
-if [ -d "$KIT/gdk-pixbuf/loaders" ]; then
+  export GDK_PIXBUF_MODULEDIR="$KIT/gdk-pixbuf/loaders"
+elif [ -d "$KIT/gdk-pixbuf/loaders" ]; then
   export GDK_PIXBUF_MODULEDIR="$KIT/gdk-pixbuf/loaders"
 fi
-export XDG_DATA_DIRS="$KIT/share:${XDG_DATA_DIRS:-/usr/share}"
+export XDG_DATA_DIRS="$DEBIAN_RUNTIME_ROOT/usr/share:$GTK_RUNTIME_ROOT/usr/share:$BROWSER_RUNTIME_ROOT/share:$KIT/share:${XDG_DATA_DIRS:-/usr/share}"
 if [ -f "$KIT/fontconfig/fonts.conf" ]; then
   export FONTCONFIG_FILE="$KIT/fontconfig/fonts.conf"
   export FONTCONFIG_PATH="$KIT/fontconfig"

@@ -7,7 +7,10 @@ case "${SCRIPT_DIR##*/}" in
   *) KIT="$SCRIPT_DIR" ;;
 esac
 KIT="${BOARD_BROWSER_KIT_DIR:-$KIT}"
-URL="${FIREFOX_ESR_URL:-https://download.mozilla.org/?product=firefox-esr-latest-ssl&os=linux64-aarch64&lang=en-US}"
+VERSION="${FIREFOX_ESR_VERSION:-140.12.0esr}"
+BASE_URL="${FIREFOX_ESR_BASE_URL:-https://archive.mozilla.org/pub/firefox/releases/$VERSION}"
+URL="${FIREFOX_ESR_URL:-$BASE_URL/linux-aarch64/en-US/firefox-$VERSION.tar.xz}"
+EXPECTED_SHA256="${FIREFOX_ESR_SHA256:-bbc835cbd3d490345e72799211f6d7f363e0ed776304166b471b30d24e8fe812}"
 OUT="$KIT/downloads/firefox-esr-linux-aarch64.tar.xz"
 
 echo "Downloading Firefox ESR ARM64 from Mozilla..."
@@ -24,8 +27,20 @@ else
   exit 1
 fi
 
+if ! command -v sha256sum >/dev/null 2>&1; then
+  echo "ERROR: sha256sum is required to verify Firefox."
+  exit 1
+fi
+actual_sha="$(sha256sum "$OUT" | awk '{print $1}')"
+if [ "$actual_sha" != "$EXPECTED_SHA256" ]; then
+  echo "ERROR: Firefox archive SHA-256 verification failed."
+  exit 1
+fi
+
 rm -rf "$KIT/firefox-esr/firefox"
 tar -xJf "$OUT" -C "$KIT/firefox-esr"
+rm -rf "$KIT/firefox-esr/firefox/updates"
+rm -f "$KIT/firefox-esr/firefox/active-update.xml"
 
 if [ ! -x "$KIT/firefox-esr/firefox/firefox" ]; then
   echo "ERROR: Firefox binary not found after extraction."

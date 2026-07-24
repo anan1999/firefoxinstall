@@ -6,6 +6,9 @@ firefox-libs/
 fonts/
 fontconfig/
 libwayland_resize_guard.so
+!libwayland_resize_guard.so
 gh_cli/
 gh_*.zip
 start-gh-login.ps1
+__pycache__/
+*.pyc
